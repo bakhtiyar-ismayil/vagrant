@@ -87,8 +87,8 @@ virsh
 ```
 list --all
 ```
-![img](/vagrant1/img/vagrant1.png)
-![img](/vagrant1/img/vagrant2.png) 
+![img](/img/vagrant1.png)
+![img](/img/vagrant2.png) 
 
 Ok, it's ready for use 
 
