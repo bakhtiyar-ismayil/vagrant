@@ -1,0 +1,65 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  # Define the master node
+  config.vm.define "master" do |master|
+    master.vm.box = "ubuntu/bionic64"
+    master.vm.network "private_network", type: "dhcp"
+    master.vm.provider "virtualbox" do |vb|
+      vb.memory = 2048
+      vb.cpus = 2
+    end
+
+    # Master node provisioning
+    master.vm.provision "shell", inline: <<-SHELL
+      # Update and install necessary packages
+      sudo apt-get update
+      sudo apt-get install -y docker.io curl
+
+      # Install Kubernetes components
+      curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+      sudo su -c 'echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list'
+      sudo apt-get update
+      sudo apt-get install -y kubelet kubeadm kubectl
+
+      # Initialize Kubernetes master
+      sudo kubeadm init --pod-network-cidr=192.168.0.0/16
+      mkdir -p $HOME/.kube
+      sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+      sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+      # Install a Pod network add-on (Calico in this example)
+      kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+
+      # Allow scheduling pods on the master node (not recommended for production)
+      kubectl taint nodes --all node-role.kubernetes.io/master-
+
+      # Generate a join token for worker nodes
+      kubeadm token create --print-join-command > /vagrant/kubeadm-join-command.sh
+    SHELL
+  end
+
+  # Define worker nodes
+  (1..3).each do |i|
+    config.vm.define "worker#{i}" do |worker|
+      worker.vm.box = "ubuntu/bionic64"
+      worker.vm.network "private_network", type: "dhcp"
+      worker.vm.provider "virtualbox" do |vb|
+        vb.memory = 2048
+        vb.cpus = 2
+      end
+
+      # Worker node provisioning
+      worker.vm.provision "shell", inline: <<-SHELL
+        # Update and install necessary packages
+        sudo apt-get update
+        sudo apt-get install -y docker.io curl
+
+        # Join the Kubernetes cluster using the join command from the master
+        sudo sh /vagrant/kubeadm-join-command.sh
+      SHELL
+    end
+  end
+end
+
